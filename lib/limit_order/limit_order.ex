@@ -1,12 +1,21 @@
 defmodule LimitOrder.Coinbase do
+  alias LimitOrder.Orderbook
   use WebSockex
   require Logger
 
   def start_link() do
-    {:ok, pid} = WebSockex.start("wss://ws-feed.pro.coinbase.com", __MODULE__, %{})
+    {:ok, books_agent} =
+      Agent.start_link(fn ->
+        %{}
+      end)
+
+    {:ok, books_agent} = new_product(books_agent, "ETH-BTC")
+
+    {:ok, wesocket_process} =
+      WebSockex.start("wss://ws-feed.pro.coinbase.com", __MODULE__, %{books_agent: books_agent})
 
     WebSockex.send_frame(
-      pid,
+      wesocket_process,
       {:text,
        Jason.encode!(%{
          "type" => "subscribe",
@@ -15,7 +24,17 @@ defmodule LimitOrder.Coinbase do
        })}
     )
 
-    {:ok, pid}
+    {:ok, wesocket_process}
+  end
+
+  defp new_product(books_agent, product_id) do
+    {:ok, orderbook_process} = Orderbook.start_link([])
+    IO.inspect(orderbook_process)
+    IO.puts("new orderbook")
+
+    Agent.update(books_agent, &Map.put(&1, product_id, orderbook_process))
+
+    {:ok, books_agent}
   end
 
   def handle_connect(_conn, state) do
@@ -28,14 +47,110 @@ defmodule LimitOrder.Coinbase do
     {:ok, state}
   end
 
-  def handle_frame({:text, payload}, state) do
+  def load_orderbook do
+  end
+
+  def handle_frame(
+        {:text, %{"product_id" => nil} = payload},
+        %{books_agent: books_agent} = state
+      ) do
     payload = Jason.decode!(payload)
     changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
 
     LimitOrder.Repo.insert!(changeset)
-    |> IO.inspect()
+
+    IO.inspect(payload)
+
+    # {:ok, book} = Agent.get(books_agent, product_id)
+
+    # type = payload["type"]
+    product_id = payload["product_id"]
+
+    IO.inspect(product_id)
+    # {:ok, book} = Agent.get(books_agent, &Map.get(&1, product_id))
+    IO.puts("pee")
+
+    # {:ok, book} = Agent.get(books_agent, product_id)
+
+    # IO.inspect(book)
+
+    # IO.puts("dingus")
+
+    # if type == "subscriptions" do
+    #   # TODO
+    #   nil
+    # end
+
+    # # MORE TODO:
+    # # Sequence Stuff
+
+    # # books_agent
+    # {:ok, book} = Agent.get(books_agent, product_id)
+
+    # book =
+    #   case type do
+    #     "open" ->
+    #       book.add(payload)
+
+    #     "done" ->
+    #       book.remove(payload.order_id)
+
+    #     "match" ->
+    #       book.match(payload)
+
+    #     "change" ->
+    #       book.change(payload)
+    #   end
+
+    # Agent.update(books_agent, &Map.put(&1, product_id, book))
 
     {:ok, state}
+  end
+
+  def handle_frame({:text, payload}, %{books_agent: books_agent} = state) do
+    payload = Jason.decode!(payload)
+    product_id = payload["product_id"]
+    type = payload["type"]
+
+    book_agent = Agent.get(books_agent, &Map.get(&1, product_id))
+
+    if type == "subscriptions" do
+      # TODO
+      nil
+    end
+
+    # # MORE TODO:
+    # # Sequence Stuff
+
+    {:ok, book_agent} =
+      case type do
+        "open" ->
+          Orderbook.add(book_agent, payload)
+
+        "done" ->
+          Orderbook.remove(book_agent, payload["order_id"])
+
+        "match" ->
+          Orderbook.match(book_agent, payload)
+
+        "change" ->
+          Orderbook.change(book_agent, payload)
+
+        _ ->
+          IO.inspect("check me out")
+          # TODO: show limit and market orders and trades
+          IO.inspect(payload)
+          {:ok, book_agent}
+      end
+
+    # Update State
+    Agent.update(books_agent, &Map.put(&1, product_id, book_agent))
+
+    changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
+
+    LimitOrder.Repo.insert!(changeset)
+
+    {:ok, %{books_agent: books_agent}}
   end
 
   def terminate(reason, state) do

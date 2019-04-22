@@ -43,7 +43,9 @@ defmodule LimitOrder.MixProject do
       {:gettext, "~> 0.11"},
       {:jason, "~> 1.0"},
       {:plug_cowboy, "~> 2.0"},
-      {:websockex, "~> 0.4.0"}
+      {:websockex, "~> 0.4.0"},
+      {:red_black_tree, git: "https://github.com/tyre/red_black_tree.git"},
+      {:rbtree, "~> 0.1.6"},
     ]
   end
 
