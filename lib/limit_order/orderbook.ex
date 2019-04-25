@@ -20,8 +20,8 @@ defmodule LimitOrder.Orderbook do
     Agent.get(agent, &Map.get(&1, :asks))
   end
 
-  def process_message(agent, key) do
-    tree = get_tree(agent, key)
+  def get_tree(agent, :orders_by_id) do
+    Agent.get(agent, &Map.get(&1, :orders_by_id))
   end
 
   def update_tree(agent, "buy", update) do
@@ -30,6 +30,25 @@ defmodule LimitOrder.Orderbook do
 
   def update_tree(agent, "sell", update) do
     Agent.update(agent, &Map.put(&1, :asks, update))
+  end
+
+  def update_tree(agent, :orders_by_id, update) do
+    Agent.update(agent, &Map.put(&1, :orders_by_id, update))
+  end
+
+  def update_orders_by_id(agent, order) do
+    orders_by_id =
+      agent
+      |> get_tree(:orders_by_id)
+
+    orders_by_id = Map.put(orders_by_id, order.id, order)
+
+    agent
+    |> update_tree(:orders_by_id, orders_by_id)
+  end
+
+  def process_message(agent, key) do
+    tree = get_tree(agent, key)
   end
 
   def add(agent, order) do
@@ -49,8 +68,13 @@ defmodule LimitOrder.Orderbook do
       node = :orddict.fetch(order.price, dict)
       dict = :orddict.store(order.price, node ++ [order], dict)
 
+      # agent =
       agent
       |> update_tree(order.side, dict)
+
+      # agent =
+      agent
+      |> update_orders_by_id(order)
 
       {:ok, agent}
     else
@@ -59,42 +83,58 @@ defmodule LimitOrder.Orderbook do
       agent
       |> update_tree(order.side, dict)
 
+      agent
+      |> update_orders_by_id(order)
+
       {:ok, agent}
     end
   end
 
-  def remove(agent, _order_id) do
+  def remove(agent, order_id) do
     # IO.inspect("cool")
     IO.inspect("remove")
 
-    # agent = Agent.get(agent, :order_by_id)
+    # orders_by_id =
+    #   agent
+    #   |> get_tree(:orders_by_id)
 
-    # # make a get funtion for order
-    # order = agent[order_id]
+    # IO.puts("ok")
 
-    # tree = get_tree(agent, order.side)
+    # IO.inspect(orders_by_id)
+    # IO.inspect(order_id)
+    # ## TODO verify this work once sync is finished
 
-    # node = RedBlackTree.get(tree, order.price)
+    # order = Map.get(orders_by_id, order_id)
 
-    # ## assert tree and node
+    # dict = get_tree(agent, order.side)
+
+    # IO.puts("ok")
+
+    # node = :orddict.fetch(order.price, dict)
+
+    # IO.puts("ok")
 
     # orders = node.orders
 
     # orders = List.delete(orders, order)
 
-    # tree =
+    # IO.puts("ok")
+
+    # dict =
     #   if Enum.count(orders) == 0 do
-    #     RedBlackTree.remove(tree, node)
+    #     :orddict.take(order.price, dict)
     #   else
-    #     tree
+    #     dict
     #   end
 
-    # {:ok, order_by_id} = Map.delete(agent, order.id, order)
+    # orders_by_id = Map.delete(orders_by_id, order.id)
 
-    # Agent.put(agent, order.side, tree)
-    # Agent.put(agent, :order_by_id, order_by_id)
+    # agent
+    # |> update_tree(order.side, dict)
 
-    # {:ok, agent}
+    # Agent.put(agent, :orders_by_id, orders_by_id)
+
+    # # {:ok, agent}
     {:ok, agent}
   end
 

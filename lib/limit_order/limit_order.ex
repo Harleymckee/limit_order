@@ -6,7 +6,10 @@ defmodule LimitOrder.Coinbase do
   def start_link() do
     {:ok, books_agent} =
       Agent.start_link(fn ->
-        %{}
+        %{
+          queues: %{},
+          sequences: %{}
+        }
       end)
 
     {:ok, books_agent} = new_product(books_agent, "ETH-BTC")
@@ -34,6 +37,15 @@ defmodule LimitOrder.Coinbase do
 
     Agent.update(books_agent, &Map.put(&1, product_id, orderbook_process))
 
+    queues = Agent.get(books_agent, &Map.get(&1, :queues))
+    sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
+
+    queues = Map.put(queues, product_id, [])
+    sequences = Map.put(sequences, product_id, -1)
+
+    Agent.update(books_agent, &Map.put(&1, :queues, queues))
+    Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
+
     {:ok, books_agent}
   end
 
@@ -47,13 +59,11 @@ defmodule LimitOrder.Coinbase do
     {:ok, state}
   end
 
-  def load_orderbook do
-  end
-
   def handle_frame(
         {:text, %{"product_id" => nil} = payload},
         %{books_agent: books_agent} = state
       ) do
+    IO.puts("no product id")
     payload = Jason.decode!(payload)
     changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
 
@@ -61,48 +71,9 @@ defmodule LimitOrder.Coinbase do
 
     IO.inspect(payload)
 
-    # {:ok, book} = Agent.get(books_agent, product_id)
-
-    # type = payload["type"]
     product_id = payload["product_id"]
 
     IO.inspect(product_id)
-    # {:ok, book} = Agent.get(books_agent, &Map.get(&1, product_id))
-    IO.puts("pee")
-
-    # {:ok, book} = Agent.get(books_agent, product_id)
-
-    # IO.inspect(book)
-
-    # IO.puts("dingus")
-
-    # if type == "subscriptions" do
-    #   # TODO
-    #   nil
-    # end
-
-    # # MORE TODO:
-    # # Sequence Stuff
-
-    # # books_agent
-    # {:ok, book} = Agent.get(books_agent, product_id)
-
-    # book =
-    #   case type do
-    #     "open" ->
-    #       book.add(payload)
-
-    #     "done" ->
-    #       book.remove(payload.order_id)
-
-    #     "match" ->
-    #       book.match(payload)
-
-    #     "change" ->
-    #       book.change(payload)
-    #   end
-
-    # Agent.update(books_agent, &Map.put(&1, product_id, book))
 
     {:ok, state}
   end
@@ -151,6 +122,12 @@ defmodule LimitOrder.Coinbase do
     LimitOrder.Repo.insert!(changeset)
 
     {:ok, %{books_agent: books_agent}}
+  end
+
+  def load_orderbook(product_id) do
+  end
+
+  def process_message(data) do
   end
 
   def terminate(reason, state) do
