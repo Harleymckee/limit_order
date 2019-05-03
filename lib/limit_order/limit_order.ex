@@ -41,7 +41,7 @@ defmodule LimitOrder.Coinbase do
     sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
 
     queues = Map.put(queues, product_id, [])
-    sequences = Map.put(sequences, product_id, -1)
+    sequences = Map.put(sequences, product_id, -2)
 
     Agent.update(books_agent, &Map.put(&1, :queues, queues))
     Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
@@ -124,7 +124,15 @@ defmodule LimitOrder.Coinbase do
     {:ok, %{books_agent: books_agent}}
   end
 
-  def load_orderbook(product_id) do
+  def load_orderbook(books_agent, product_id) do
+    queues = Agent.get(books_agent, &Map.get(&1, :queues))
+    sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
+
+    queues = Map.put(queues, product_id, [])
+    sequences = Map.put(sequences, product_id, -1)
+
+    Agent.update(books_agent, &Map.put(&1, :queues, queues))
+    Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
   end
 
   def process_message(data) do

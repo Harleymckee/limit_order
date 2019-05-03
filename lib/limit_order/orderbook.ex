@@ -36,6 +36,12 @@ defmodule LimitOrder.Orderbook do
     Agent.update(agent, &Map.put(&1, :orders_by_id, update))
   end
 
+  def state(book) do
+    Enum.each(book.bids, fn order -> nil end)
+
+    Enum.each(book.asks, fn order -> nil end)
+  end
+
   def update_orders_by_id(agent, order) do
     orders_by_id =
       agent
