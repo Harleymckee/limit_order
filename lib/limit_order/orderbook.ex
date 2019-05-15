@@ -36,10 +36,27 @@ defmodule LimitOrder.Orderbook do
     Agent.update(agent, &Map.put(&1, :orders_by_id, update))
   end
 
-  def state(book) do
-    Enum.each(book.bids, fn order -> nil end)
+  def state(agent, book) do
+    Enum.each(book["bids"], fn order ->
+      add(agent, %{
+        "id" => Enum.at(order, 2),
+        "side" => "buy",
+        "price" => Enum.at(order, 0),
+        "size" => Enum.at(order, 1)
+      })
+    end)
 
-    Enum.each(book.asks, fn order -> nil end)
+    Enum.each(book["asks"], fn order ->
+      add(agent, %{
+        "id" => Enum.at(order, 2),
+        "side" => "sell",
+        "price" => Enum.at(order, 0),
+        "size" => Enum.at(order, 1)
+      })
+    end)
+
+    # note there is a !book case in node code which seems to init rb tree
+    {:ok, agent}
   end
 
   def update_orders_by_id(agent, order) do

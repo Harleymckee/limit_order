@@ -1,5 +1,5 @@
 defmodule LimitOrder.Coinbase do
-  alias LimitOrder.Orderbook
+  alias LimitOrder.{Orderbook, PublicClient}
   use WebSockex
   require Logger
 
@@ -46,6 +46,8 @@ defmodule LimitOrder.Coinbase do
     Agent.update(books_agent, &Map.put(&1, :queues, queues))
     Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
 
+    IO.puts("new product created")
+
     {:ok, books_agent}
   end
 
@@ -80,48 +82,140 @@ defmodule LimitOrder.Coinbase do
 
   def handle_frame({:text, payload}, %{books_agent: books_agent} = state) do
     payload = Jason.decode!(payload)
+
+    process_message(books_agent, payload)
+  end
+
+  def process_message(books_agent, %{"type" => "subscriptions"} = payload) do
+    IO.puts("new subscription")
+    IO.inspect(payload)
+    # TODO: new product here / new agent here
+
+    {:ok, %{books_agent: books_agent}}
+  end
+
+  def should_load_orderbook?(books_agent, %{"product_id" => product_id, "sequence" => sequence}) do
+    sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
+
+    if sequences[product_id] == -2 or sequences[product_id] == sequence do
+      true
+    else
+      false
+    end
+  end
+
+  # def process_message(books_agent, payload) when should_load_orderbook?(books_agent, payload) do
+  #   load_orderbook(books_agent, product_id)
+  # end
+
+  def process_message(books_agent, payload) do
     product_id = payload["product_id"]
     type = payload["type"]
+    sequence = payload["sequence"]
 
-    book_agent = Agent.get(books_agent, &Map.get(&1, product_id))
-
-    if type == "subscriptions" do
-      # TODO
-      nil
-    end
-
-    # # MORE TODO:
-    # # Sequence Stuff
-
-    {:ok, book_agent} =
-      case type do
-        "open" ->
-          Orderbook.add(book_agent, payload)
-
-        "done" ->
-          Orderbook.remove(book_agent, payload["order_id"])
-
-        "match" ->
-          Orderbook.match(book_agent, payload)
-
-        "change" ->
-          Orderbook.change(book_agent, payload)
-
-        _ ->
-          IO.inspect("check me out")
-          # TODO: show limit and market orders and trades
-          IO.inspect(payload)
-          {:ok, book_agent}
-      end
-
-    # Update State
-    Agent.update(books_agent, &Map.put(&1, product_id, book_agent))
-
+    # TODO: make side task
     changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
 
     LimitOrder.Repo.insert!(changeset)
 
-    {:ok, %{books_agent: books_agent}}
+    book_agent = Agent.get(books_agent, &Map.get(&1, product_id))
+    sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
+    queues = Agent.get(books_agent, &Map.get(&1, :queues))
+
+    IO.puts("process message")
+
+    IO.inspect(sequences[product_id])
+    IO.inspect(payload)
+
+    if sequences[product_id] < 0 do
+      IO.puts("queue spot")
+
+      IO.inspect(queues)
+
+      # order book snapshot not loaded yet
+      queues = Map.put(queues, product_id, queues[product_id] ++ payload)
+
+      Agent.update(books_agent, &Map.put(&1, :queues, queues))
+    end
+
+    # # TODO: can this be in handle frame?
+    # if sequences[product_id] == -2 do
+    #   IO.puts("LOAD BOOK")
+    #   load_orderbook(books_agent, product_id)
+    #   # RETURN
+    # end
+
+    # if should_load_orderbook?(books_agent, payload) do
+    #   IO.puts("LOAD BOOK")
+    #   load_orderbook(books_agent, product_id)
+    # end
+
+    cond do
+      should_load_orderbook?(books_agent, payload) ->
+        load_orderbook(books_agent, product_id)
+
+      sequences[product_id] == -1 ->
+        {:ok, %{books_agent: books_agent}}
+
+      sequence <= sequences[product_id] ->
+        {:ok, %{books_agent: books_agent}}
+
+      true ->
+        sequences = Map.put(sequences, product_id, sequence)
+        Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
+
+        {:ok, book_agent} =
+          case type do
+            "open" ->
+              Orderbook.add(book_agent, payload)
+
+            "done" ->
+              Orderbook.remove(book_agent, payload["order_id"])
+
+            "match" ->
+              Orderbook.match(book_agent, payload)
+
+            "change" ->
+              Orderbook.change(book_agent, payload)
+
+            _ ->
+              IO.inspect("check me out")
+              # TODO: show limit and market orders and trades
+              IO.inspect(payload)
+              {:ok, book_agent}
+          end
+
+        # Update State
+        Agent.update(books_agent, &Map.put(&1, product_id, book_agent))
+
+        # changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
+
+        # LimitOrder.Repo.insert!(changeset)
+
+        {:ok, %{books_agent: books_agent}}
+    end
+
+    # if sequences[product_id] == -1 do
+    #   # TODO RETURN void
+    # end
+
+    # if sequence <= sequences[product_id] do
+    #   # TODO RETURN void
+    # end
+
+    # # TODO: can this be in handle frame?
+    # if sequences[product_id] == sequence do
+    #   load_orderbook(books_agent, product_id)
+    #   # RETURN
+    # end
+  end
+
+  # move to own module? is a http req to get orderbook
+  def get_product_orderbook(product_id) do
+    case PublicClient.get("/products/#{product_id}/book?level=3") do
+      {:ok, %HTTPoison.Response{body: body}} ->
+        body
+    end
   end
 
   def load_orderbook(books_agent, product_id) do
@@ -133,9 +227,38 @@ defmodule LimitOrder.Coinbase do
 
     Agent.update(books_agent, &Map.put(&1, :queues, queues))
     Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
-  end
 
-  def process_message(data) do
+    IO.puts("cool")
+
+    data = get_product_orderbook(product_id)
+
+    IO.inspect(data)
+
+    product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
+
+    # may be async
+    {:ok, product_agent} = Orderbook.state(product_agent, data)
+    IO.puts("yas")
+
+    sequences = Map.put(sequences, product_id, data["sequence"])
+    Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
+    queues = Agent.get(books_agent, &Map.get(&1, :queues))
+    IO.puts("ok")
+
+    Enum.each(queues[product_id], fn data ->
+      process_message(books_agent, data)
+    end)
+
+    IO.puts("ok")
+
+    queues = Map.put(queues, product_id, [])
+    Agent.update(books_agent, &Map.put(&1, :queues, queues))
+
+    # Update State
+    Agent.update(books_agent, &Map.put(&1, product_id, product_agent))
+
+    IO.puts("made it through load orderbook")
+    {:ok, %{books_agent: books_agent}}
   end
 
   def terminate(reason, state) do
