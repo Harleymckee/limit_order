@@ -12,7 +12,7 @@ defmodule LimitOrder.Coinbase do
         }
       end)
 
-    {:ok, books_agent} = new_product(books_agent, "ETH-BTC")
+    {:ok, books_agent} = new_product(books_agent, "BAT-ETH")
 
     {:ok, wesocket_process} =
       WebSockex.start("wss://ws-feed.pro.coinbase.com", __MODULE__, %{books_agent: books_agent})
@@ -22,7 +22,7 @@ defmodule LimitOrder.Coinbase do
       {:text,
        Jason.encode!(%{
          "type" => "subscribe",
-         "product_ids" => ["ETH-BTC"],
+         "product_ids" => ["BAT-ETH"],
          "channels" => ["full"]
        })}
     )
@@ -94,16 +94,6 @@ defmodule LimitOrder.Coinbase do
     {:ok, %{books_agent: books_agent}}
   end
 
-  def should_load_orderbook?(books_agent, %{"product_id" => product_id, "sequence" => sequence}) do
-    sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
-
-    if sequences[product_id] == -2 or sequences[product_id] == sequence do
-      true
-    else
-      false
-    end
-  end
-
   # def process_message(books_agent, payload) when should_load_orderbook?(books_agent, payload) do
   #   load_orderbook(books_agent, product_id)
   # end
@@ -124,19 +114,25 @@ defmodule LimitOrder.Coinbase do
 
     IO.puts("process message")
 
-    IO.inspect(sequences[product_id])
-    IO.inspect(payload)
+    # IO.inspect(sequences[product_id])
+    # IO.inspect(payload)
 
     if sequences[product_id] < 0 do
-      IO.puts("queue spot")
+      # IO.puts("queue spot")
 
-      IO.inspect(queues)
+      # IO.inspect(queues)
 
       # order book snapshot not loaded yet
-      queues = Map.put(queues, product_id, queues[product_id] ++ payload)
+      queues = Map.put(queues, product_id, queues[product_id] ++ [payload])
+
+      # IO.inspect(queues)
 
       Agent.update(books_agent, &Map.put(&1, :queues, queues))
     end
+
+    # IO.puts("after queue")
+    # IO.inspect(sequences[product_id])
+    # IO.inspect(sequence)
 
     # # TODO: can this be in handle frame?
     # if sequences[product_id] == -2 do
@@ -151,16 +147,28 @@ defmodule LimitOrder.Coinbase do
     # end
 
     cond do
-      should_load_orderbook?(books_agent, payload) ->
+      sequences[product_id] == -2 ->
+        IO.inspect("start loading")
+
         load_orderbook(books_agent, product_id)
+        |> IO.inspect()
 
       sequences[product_id] == -1 ->
+        IO.inspect("is loading")
         {:ok, %{books_agent: books_agent}}
 
       sequence <= sequences[product_id] ->
+        # skip, was already processed
+        IO.puts("skip, was already processed")
         {:ok, %{books_agent: books_agent}}
 
+      sequences[product_id] + 1 != sequence ->
+        # means we dropped a message and we should re sync
+        IO.puts("FUCKING RESYNC")
+        load_orderbook(books_agent, product_id)
+
       true ->
+        IO.puts("BOOM")
         sequences = Map.put(sequences, product_id, sequence)
         Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
 
@@ -219,6 +227,7 @@ defmodule LimitOrder.Coinbase do
   end
 
   def load_orderbook(books_agent, product_id) do
+    IO.puts("sync order book")
     queues = Agent.get(books_agent, &Map.get(&1, :queues))
     sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
 
@@ -228,36 +237,48 @@ defmodule LimitOrder.Coinbase do
     Agent.update(books_agent, &Map.put(&1, :queues, queues))
     Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
 
-    IO.puts("cool")
+    Task.start(fn ->
+      IO.puts("task start")
 
-    data = get_product_orderbook(product_id)
+      task =
+        Task.async(fn ->
+          get_product_orderbook(product_id)
+        end)
 
-    IO.inspect(data)
+      data = Task.await(task)
 
-    product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
+      IO.inspect(data)
 
-    # may be async
-    {:ok, product_agent} = Orderbook.state(product_agent, data)
-    IO.puts("yas")
+      product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
 
-    sequences = Map.put(sequences, product_id, data["sequence"])
-    Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
-    queues = Agent.get(books_agent, &Map.get(&1, :queues))
-    IO.puts("ok")
+      # may be async
+      {:ok, product_agent} = Orderbook.state(product_agent, data)
+      IO.puts("yas")
 
-    Enum.each(queues[product_id], fn data ->
-      process_message(books_agent, data)
+      sequences = Map.put(sequences, product_id, data["sequence"])
+      Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
+      queues = Agent.get(books_agent, &Map.get(&1, :queues))
+      IO.puts("process queue")
+
+      IO.inspect(queues)
+
+      Enum.each(queues[product_id], fn order ->
+        process_message(books_agent, order)
+      end)
+
+      IO.puts("ok")
+
+      queues = Map.put(queues, product_id, [])
+      Agent.update(books_agent, &Map.put(&1, :queues, queues))
+
+      # Update State
+      Agent.update(books_agent, &Map.put(&1, product_id, product_agent))
+
+      IO.puts("made it through load orderbook")
     end)
 
-    IO.puts("ok")
+    IO.puts("after sync in")
 
-    queues = Map.put(queues, product_id, [])
-    Agent.update(books_agent, &Map.put(&1, :queues, queues))
-
-    # Update State
-    Agent.update(books_agent, &Map.put(&1, product_id, product_agent))
-
-    IO.puts("made it through load orderbook")
     {:ok, %{books_agent: books_agent}}
   end
 

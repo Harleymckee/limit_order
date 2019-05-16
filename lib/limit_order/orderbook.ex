@@ -81,9 +81,11 @@ defmodule LimitOrder.Orderbook do
       id: order["order_id"] || order["id"],
       side: order["side"],
       price: Decimal.new(order["price"]) |> Decimal.to_float(),
-      size: order["size"] || order["remaining_size"],
-      sequence: order["sequence"]
+      size: order["size"] || order["remaining_size"]
+      # sequence: order["s11equence"]
     }
+
+    IO.inspect(order)
 
     dict = get_tree(agent, order.side)
 
@@ -117,45 +119,57 @@ defmodule LimitOrder.Orderbook do
     # IO.inspect("cool")
     IO.inspect("remove")
 
-    # orders_by_id =
-    #   agent
-    #   |> get_tree(:orders_by_id)
+    orders_by_id =
+      agent
+      |> get_tree(:orders_by_id)
 
-    # IO.puts("ok")
+    IO.puts("ok")
 
     # IO.inspect(orders_by_id)
     # IO.inspect(order_id)
     # ## TODO verify this work once sync is finished
 
-    # order = Map.get(orders_by_id, order_id)
+    order = Map.get(orders_by_id, order_id)
 
-    # dict = get_tree(agent, order.side)
+    dict = get_tree(agent, order.side)
 
-    # IO.puts("ok")
+    IO.puts("ok")
 
-    # node = :orddict.fetch(order.price, dict)
+    node = :orddict.fetch(order.price, dict)
 
-    # IO.puts("ok")
+    IO.puts("ok")
 
-    # orders = node.orders
+    IO.inspect(node)
 
-    # orders = List.delete(orders, order)
+    orders = node
 
-    # IO.puts("ok")
+    IO.inspect(orders)
+    IO.inspect(order)
 
-    # dict =
-    #   if Enum.count(orders) == 0 do
-    #     :orddict.take(order.price, dict)
-    #   else
-    #     dict
-    #   end
+    orders = List.delete(orders, order)
 
-    # orders_by_id = Map.delete(orders_by_id, order.id)
+    IO.puts("ok")
+    IO.inspect(orders)
 
-    # agent
-    # |> update_tree(order.side, dict)
+    # dict = :orddict.store(order.price, node ++ [order], dict)
 
-    # Agent.put(agent, :orders_by_id, orders_by_id)
+    dict =
+      if Enum.count(orders) == 0 do
+        :orddict.take(order.price, dict)
+      else
+        :orddict.store(order.price, orders, dict)
+      end
+
+    IO.puts("cool")
+
+    orders_by_id = Map.delete(orders_by_id, order.id)
+
+    agent
+    |> update_tree(order.side, dict)
+
+    Agent.put(agent, :orders_by_id, orders_by_id)
+
+    IO.inspect("remove success?")
 
     # # {:ok, agent}
     {:ok, agent}
