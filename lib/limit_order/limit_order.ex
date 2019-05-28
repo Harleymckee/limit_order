@@ -32,7 +32,6 @@ defmodule LimitOrder.Coinbase do
 
   defp new_product(books_agent, product_id) do
     {:ok, orderbook_process} = Orderbook.start_link([])
-    IO.inspect(orderbook_process)
     IO.puts("new orderbook")
 
     Agent.update(books_agent, &Map.put(&1, product_id, orderbook_process))
@@ -71,11 +70,7 @@ defmodule LimitOrder.Coinbase do
 
     LimitOrder.Repo.insert!(changeset)
 
-    IO.inspect(payload)
-
     product_id = payload["product_id"]
-
-    IO.inspect(product_id)
 
     {:ok, state}
   end
@@ -88,7 +83,6 @@ defmodule LimitOrder.Coinbase do
 
   def process_message(books_agent, %{"type" => "subscriptions"} = payload) do
     IO.puts("new subscription")
-    IO.inspect(payload)
     # TODO: new product here / new agent here
 
     {:ok, %{books_agent: books_agent}}
@@ -114,44 +108,18 @@ defmodule LimitOrder.Coinbase do
 
     IO.puts("process message")
 
-    # IO.inspect(sequences[product_id])
-    # IO.inspect(payload)
-
     if sequences[product_id] < 0 do
-      # IO.puts("queue spot")
-
-      # IO.inspect(queues)
-
       # order book snapshot not loaded yet
       queues = Map.put(queues, product_id, queues[product_id] ++ [payload])
 
-      # IO.inspect(queues)
-
       Agent.update(books_agent, &Map.put(&1, :queues, queues))
     end
-
-    # IO.puts("after queue")
-    # IO.inspect(sequences[product_id])
-    # IO.inspect(sequence)
-
-    # # TODO: can this be in handle frame?
-    # if sequences[product_id] == -2 do
-    #   IO.puts("LOAD BOOK")
-    #   load_orderbook(books_agent, product_id)
-    #   # RETURN
-    # end
-
-    # if should_load_orderbook?(books_agent, payload) do
-    #   IO.puts("LOAD BOOK")
-    #   load_orderbook(books_agent, product_id)
-    # end
 
     cond do
       sequences[product_id] == -2 ->
         IO.inspect("start loading")
 
         load_orderbook(books_agent, product_id)
-        |> IO.inspect()
 
       sequences[product_id] == -1 ->
         IO.inspect("is loading")
@@ -247,8 +215,6 @@ defmodule LimitOrder.Coinbase do
 
       data = Task.await(task)
 
-      IO.inspect(data)
-
       product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
 
       # may be async
@@ -259,8 +225,6 @@ defmodule LimitOrder.Coinbase do
       Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
       queues = Agent.get(books_agent, &Map.get(&1, :queues))
       IO.puts("process queue")
-
-      IO.inspect(queues)
 
       Enum.each(queues[product_id], fn order ->
         process_message(books_agent, order)

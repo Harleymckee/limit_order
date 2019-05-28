@@ -75,17 +75,12 @@ defmodule LimitOrder.Orderbook do
   end
 
   def add(agent, order) do
-    IO.puts("add")
-
     order = %{
       id: order["order_id"] || order["id"],
       side: order["side"],
       price: Decimal.new(order["price"]) |> Decimal.to_float(),
       size: order["size"] || order["remaining_size"]
-      # sequence: order["s11equence"]
     }
-
-    IO.inspect(order)
 
     dict = get_tree(agent, order.side)
 
@@ -116,47 +111,25 @@ defmodule LimitOrder.Orderbook do
   end
 
   def remove(agent, order_id) do
-    # IO.inspect("cool")
-    IO.inspect("remove")
-
     orders_by_id =
       agent
       |> get_tree(:orders_by_id)
-
-    IO.puts("ok")
-
-    # IO.inspect(orders_by_id)
-    # IO.inspect(order_id)
-    # ## TODO verify this work once sync is finished
 
     order = Map.get(orders_by_id, order_id)
 
     dict = get_tree(agent, order.side)
 
-    IO.puts("ok")
-
     node = :orddict.fetch(order.price, dict)
-
-    IO.puts("ok")
-
-    IO.inspect(node)
 
     orders = node
 
-    IO.inspect(orders)
-    IO.inspect(order)
-
     orders = List.delete(orders, order)
-
-    IO.puts("ok")
-    IO.inspect(orders)
-
-    # dict = :orddict.store(order.price, node ++ [order], dict)
 
     dict =
       if Enum.count(orders) == 0 do
         :orddict.take(order.price, dict)
       else
+        IO.puts("AHHHAHHH")
         :orddict.store(order.price, orders, dict)
       end
 
@@ -167,11 +140,8 @@ defmodule LimitOrder.Orderbook do
     agent
     |> update_tree(order.side, dict)
 
-    Agent.put(agent, :orders_by_id, orders_by_id)
+    Agent.update(agent, &Map.put(&1, :orders_by_id, orders_by_id))
 
-    IO.inspect("remove success?")
-
-    # # {:ok, agent}
     {:ok, agent}
   end
 
