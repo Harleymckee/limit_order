@@ -1,4 +1,6 @@
 defmodule LimitOrder.Orderbook do
+  require IEx
+
   def start_link(_opts) do
     bids = :orddict.new()
     asks = :orddict.new()
@@ -93,8 +95,8 @@ defmodule LimitOrder.Orderbook do
     order = %{
       id: order["order_id"] || order["id"],
       side: order["side"],
-      price: Decimal.new(order["price"]) |> Decimal.to_float(),
-      # price: order["price"],
+      # price: Decimal.new(order["price"]) |> Decimal.to_float(),
+      price: order["price"],
       size: order["size"] || order["remaining_size"]
     }
 
@@ -102,10 +104,22 @@ defmodule LimitOrder.Orderbook do
 
     IO.puts("is key")
 
-    IO.inspect(order)
+    # IO.inspect(order)
+
+    # IO.inspect(dict)
+    # IO.inspect(order)
+    # IO.inspect(:orddict.is_key(order.price, dict))
+
+    # IEx.pry()
+    # case :orddict.is_key(order.price, dict) do
+    #   {:ok, agent} ->
+
+    # end
 
     {:ok, agent} =
       if :orddict.is_key(order.price, dict) do
+        IO.puts("if")
+
         node = :orddict.fetch(order.price, dict)
         dict = :orddict.store(order.price, node ++ [order], dict)
 
@@ -119,6 +133,7 @@ defmodule LimitOrder.Orderbook do
 
         {:ok, agent}
       else
+        IO.puts("else")
         dict = :orddict.store(order.price, [order], dict)
 
         agent
@@ -163,7 +178,8 @@ defmodule LimitOrder.Orderbook do
     dict =
       if Enum.count(orders) == 0 do
         IO.puts("remove price row")
-        :orddict.take(order.price, dict)
+        {_value, dict} = :orddict.take(order.price, dict)
+        dict
       else
         IO.puts("update orders list")
         :orddict.store(order.price, orders, dict)

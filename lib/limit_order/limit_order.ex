@@ -2,6 +2,7 @@ defmodule LimitOrder.Coinbase do
   alias LimitOrder.{Orderbook, PublicClient}
   use WebSockex
   require Logger
+  require IEx
 
   def start_link() do
     {:ok, books_agent} =
@@ -110,9 +111,7 @@ defmodule LimitOrder.Coinbase do
 
     if sequences[product_id] < 0 do
       # order book snapshot not loaded yet
-      queues =
-        Map.put(queues, product_id, queues[product_id] ++ [payload])
-        |> IO.inspect()
+      queues = Map.put(queues, product_id, queues[product_id] ++ [payload])
 
       IO.puts("adds to queue")
 
@@ -202,6 +201,8 @@ defmodule LimitOrder.Coinbase do
 
   def load_orderbook(books_agent, product_id) do
     IO.puts("sync order book")
+    # IEx.pry()
+
     queues = Agent.get(books_agent, &Map.get(&1, :queues))
     sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
 
@@ -211,41 +212,43 @@ defmodule LimitOrder.Coinbase do
     Agent.update(books_agent, &Map.put(&1, :queues, queues))
     Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
 
-    Task.start(fn ->
-      IO.puts("task start")
+    # Task.start(fn ->
+    IO.puts("task start")
 
-      # task =
-      #   Task.async(fn ->
-      #     get_product_orderbook(product_id)
-      #   end)
+    # task =
+    #   Task.async(fn ->
+    #     get_product_orderbook(product_id)
+    #   end)
 
-      data = get_product_orderbook(product_id)
+    data = get_product_orderbook(product_id)
 
-      product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
+    product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
 
-      # may be async
-      {:ok, product_agent} = Orderbook.state(product_agent, data)
-      IO.puts("yas")
+    # may be async
+    {:ok, product_agent} = Orderbook.state(product_agent, data)
+    IO.puts("yas")
 
-      sequences = Map.put(sequences, product_id, data["sequence"])
-      Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
-      queues = Agent.get(books_agent, &Map.get(&1, :queues))
-      IO.puts("process queue")
+    sequences = Map.put(sequences, product_id, data["sequence"])
+    Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
+    queues = Agent.get(books_agent, &Map.get(&1, :queues))
+    IO.puts("process queue")
 
-      Enum.each(queues[product_id], fn order ->
-        process_message(books_agent, order)
-      end)
-
-      IO.puts("ok")
-
-      queues = Map.put(queues, product_id, [])
-      Agent.update(books_agent, &Map.put(&1, :queues, queues))
-
-      # Update State
-      Agent.update(books_agent, &Map.put(&1, product_id, product_agent))
-
-      IO.puts("made it through load orderbook")
+    Enum.each(queues[product_id], fn order ->
+      process_message(books_agent, order)
     end)
+
+    IO.puts("ok")
+
+    queues = Map.put(queues, product_id, [])
+    Agent.update(books_agent, &Map.put(&1, :queues, queues))
+
+    # Update State
+    Agent.update(books_agent, &Map.put(&1, product_id, product_agent))
+
+    # IEx.pry()
+
+    IO.puts("made it through load orderbook")
+    # end)
 
     IO.puts("after sync in")
 
