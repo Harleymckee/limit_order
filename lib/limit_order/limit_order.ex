@@ -110,7 +110,11 @@ defmodule LimitOrder.Coinbase do
 
     if sequences[product_id] < 0 do
       # order book snapshot not loaded yet
-      queues = Map.put(queues, product_id, queues[product_id] ++ [payload])
+      queues =
+        Map.put(queues, product_id, queues[product_id] ++ [payload])
+        |> IO.inspect()
+
+      IO.puts("adds to queue")
 
       Agent.update(books_agent, &Map.put(&1, :queues, queues))
     end
@@ -140,6 +144,8 @@ defmodule LimitOrder.Coinbase do
         sequences = Map.put(sequences, product_id, sequence)
         Agent.update(books_agent, &Map.put(&1, :sequences, sequences))
 
+        IO.inspect(type)
+
         {:ok, book_agent} =
           case type do
             "open" ->
@@ -155,7 +161,7 @@ defmodule LimitOrder.Coinbase do
               Orderbook.change(book_agent, payload)
 
             _ ->
-              IO.inspect("check me out")
+              IO.inspect("did not meet case clause")
               # TODO: show limit and market orders and trades
               IO.inspect(payload)
               {:ok, book_agent}
@@ -208,12 +214,12 @@ defmodule LimitOrder.Coinbase do
     Task.start(fn ->
       IO.puts("task start")
 
-      task =
-        Task.async(fn ->
-          get_product_orderbook(product_id)
-        end)
+      # task =
+      #   Task.async(fn ->
+      #     get_product_orderbook(product_id)
+      #   end)
 
-      data = Task.await(task)
+      data = get_product_orderbook(product_id)
 
       product_agent = Agent.get(books_agent, &Map.get(&1, product_id))
 

@@ -36,6 +36,19 @@ defmodule LimitOrder.Orderbook do
     Agent.update(agent, &Map.put(&1, :orders_by_id, update))
   end
 
+  def state(agent) do
+    bids = get_tree(agent, "buy")
+    asks = get_tree(agent, "sell")
+
+    # TODO: need to figure out way I dont have to call reverse here
+    bids = Enum.reverse(:orddict.fold(fn _key, value, acc -> acc ++ value end, [], bids))
+    asks = :orddict.fold(fn _key, value, acc -> acc ++ value end, [], asks)
+
+    dict = %{asks: asks, bids: bids}
+
+    {:ok, agent, dict}
+  end
+
   def state(agent, book) do
     Enum.each(book["bids"], fn order ->
       add(agent, %{
@@ -75,51 +88,73 @@ defmodule LimitOrder.Orderbook do
   end
 
   def add(agent, order) do
+    IO.puts("add")
+
     order = %{
       id: order["order_id"] || order["id"],
       side: order["side"],
       price: Decimal.new(order["price"]) |> Decimal.to_float(),
+      # price: order["price"],
       size: order["size"] || order["remaining_size"]
     }
 
     dict = get_tree(agent, order.side)
 
-    if :orddict.is_key(order.price, dict) do
-      node = :orddict.fetch(order.price, dict)
-      dict = :orddict.store(order.price, node ++ [order], dict)
+    IO.puts("is key")
 
-      # agent =
-      agent
-      |> update_tree(order.side, dict)
+    IO.inspect(order)
 
-      # agent =
-      agent
-      |> update_orders_by_id(order)
+    {:ok, agent} =
+      if :orddict.is_key(order.price, dict) do
+        node = :orddict.fetch(order.price, dict)
+        dict = :orddict.store(order.price, node ++ [order], dict)
 
-      {:ok, agent}
-    else
-      dict = :orddict.store(order.price, [order], dict)
+        # agent =
+        agent
+        |> update_tree(order.side, dict)
 
-      agent
-      |> update_tree(order.side, dict)
+        # agent =
+        agent
+        |> update_orders_by_id(order)
 
-      agent
-      |> update_orders_by_id(order)
+        {:ok, agent}
+      else
+        dict = :orddict.store(order.price, [order], dict)
 
-      {:ok, agent}
-    end
+        agent
+        |> update_tree(order.side, dict)
+
+        agent
+        |> update_orders_by_id(order)
+
+        {:ok, agent}
+      end
+
+    IO.puts("added")
+
+    {:ok, agent}
   end
 
   def remove(agent, order_id) do
+    IO.puts("remove")
+
+    IO.puts("lookup order by id")
+    # get id lookup table from agent
     orders_by_id =
       agent
+      # TODO: change its name from get_tree
       |> get_tree(:orders_by_id)
 
     order = Map.get(orders_by_id, order_id)
 
     dict = get_tree(agent, order.side)
 
+    IO.puts("fetch price node")
+    # IO.inspect(dict)
+    IO.inspect(order)
     node = :orddict.fetch(order.price, dict)
+
+    IO.puts("remove 3")
 
     orders = node
 
@@ -127,13 +162,12 @@ defmodule LimitOrder.Orderbook do
 
     dict =
       if Enum.count(orders) == 0 do
+        IO.puts("remove price row")
         :orddict.take(order.price, dict)
       else
-        IO.puts("AHHHAHHH")
+        IO.puts("update orders list")
         :orddict.store(order.price, orders, dict)
       end
-
-    IO.puts("cool")
 
     orders_by_id = Map.delete(orders_by_id, order.id)
 
@@ -142,6 +176,7 @@ defmodule LimitOrder.Orderbook do
 
     Agent.update(agent, &Map.put(&1, :orders_by_id, orders_by_id))
 
+    IO.puts("removed")
     {:ok, agent}
   end
 
