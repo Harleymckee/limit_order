@@ -13,6 +13,7 @@ defmodule LimitOrder.Application do
       # Start the Ecto repository
       LimitOrder.Repo,
       # Start the endpoint when the application starts
+      # ,
       LimitOrderWeb.Endpoint,
       # Starts a worker by calling: LimitOrder.Worker.start_link(arg)
       # {LimitOrder.Worker, arg},
