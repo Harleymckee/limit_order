@@ -169,6 +169,10 @@ defmodule LimitOrder.Coinbase do
         # Update State
         Agent.update(books_agent, &Map.put(&1, product_id, book_agent))
 
+        dict = Agent.get(book_agent, &Map.get(&1, :bids))
+
+        Phoenix.PubSub.broadcast(LimitOrder.PubSub, "book", dict)
+
         # changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
 
         # LimitOrder.Repo.insert!(changeset)

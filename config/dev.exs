@@ -52,7 +52,8 @@ config :limit_order, LimitOrderWeb.Endpoint,
       ~r{priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$},
       ~r{priv/gettext/.*(po)$},
       ~r{lib/limit_order_web/views/.*(ex)$},
-      ~r{lib/limit_order_web/templates/.*(eex)$}
+      ~r{lib/limit_order_web/templates/.*(eex)$},
+      ~r{lib/limit_order_web/live/.*(ex)$}
     ]
   ]
 
