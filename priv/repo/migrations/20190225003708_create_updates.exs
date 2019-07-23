@@ -5,7 +5,7 @@ defmodule LimitOrder.Repo.Migrations.CreateCoinbaseUpdates do
     create table(:coinbase_updates) do
       add :type, :string
       add :time, :string
-      add :sequence, :integer
+      add :sequence, :string
       add :trade_id, :integer
       add :product_id, :string
       add :order_id, :string

@@ -13,7 +13,7 @@ defmodule LimitOrder.Coinbase do
         }
       end)
 
-    {:ok, books_agent} = new_product(books_agent, "BAT-ETH")
+    {:ok, books_agent} = new_product(books_agent, "BTC-USDC")
 
     {:ok, wesocket_process} =
       WebSockex.start("wss://ws-feed.pro.coinbase.com", __MODULE__, %{books_agent: books_agent})
@@ -23,7 +23,7 @@ defmodule LimitOrder.Coinbase do
       {:text,
        Jason.encode!(%{
          "type" => "subscribe",
-         "product_ids" => ["BAT-ETH"],
+         "product_ids" => ["BTC-USDC"],
          "channels" => ["full"]
        })}
     )
@@ -99,7 +99,11 @@ defmodule LimitOrder.Coinbase do
     sequence = payload["sequence"]
 
     # TODO: make side task
-    changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
+    changeset =
+      LimitOrder.CoinbaseUpdate.changeset(
+        %LimitOrder.CoinbaseUpdate{},
+        Map.merge(payload, %{"sequence" => sequence |> Integer.to_string()})
+      )
 
     LimitOrder.Repo.insert!(changeset)
 
@@ -136,6 +140,7 @@ defmodule LimitOrder.Coinbase do
       sequences[product_id] + 1 != sequence ->
         # means we dropped a message and we should re sync
         IO.puts("FUCKING RESYNC")
+        IEx.pry()
         load_orderbook(books_agent, product_id)
 
       true ->
@@ -169,9 +174,30 @@ defmodule LimitOrder.Coinbase do
         # Update State
         Agent.update(books_agent, &Map.put(&1, product_id, book_agent))
 
-        dict = Agent.get(book_agent, &Map.get(&1, :bids))
+        bids = Agent.get(book_agent, &Map.get(&1, :bids))
+        asks = Agent.get(book_agent, &Map.get(&1, :asks))
 
-        Phoenix.PubSub.broadcast(LimitOrder.PubSub, "book", dict)
+        bids =
+          Enum.map(Enum.take(bids, -30), fn {k, v} ->
+            size =
+              Enum.reduce(v, 0, fn x, acc -> Decimal.add(x.size, acc) |> Decimal.to_string() end)
+
+            %{price: k, size: size, orders: v |> Jason.encode!()}
+          end)
+          |> Enum.reverse()
+
+        asks =
+          Enum.map(Enum.take(asks, 30), fn {k, v} ->
+            size =
+              Enum.reduce(v, 0, fn x, acc -> Decimal.add(x.size, acc) |> Decimal.to_string() end)
+
+            %{price: k, size: size, orders: v |> Jason.encode!()}
+          end)
+          |> Enum.reverse()
+
+        Phoenix.PubSub.broadcast(LimitOrder.PubSub, "book", %{bids: bids, asks: asks})
+
+        # asks: asks})
 
         # changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
 

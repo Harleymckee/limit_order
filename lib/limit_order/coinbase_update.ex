@@ -9,7 +9,7 @@ defmodule LimitOrder.CoinbaseUpdate do
   schema "coinbase_updates" do
     field(:type, :string)
     field(:time, :string)
-    field(:sequence, :integer)
+    field(:sequence, :string)
     field(:trade_id, :integer)
     field(:product_id, :string)
     field(:order_id, :string)
