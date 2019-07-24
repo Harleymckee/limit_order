@@ -104,18 +104,6 @@ defmodule LimitOrder.Orderbook do
 
     IO.puts("is key")
 
-    # IO.inspect(order)
-
-    # IO.inspect(dict)
-    # IO.inspect(order)
-    # IO.inspect(:orddict.is_key(order.price, dict))
-
-    # IEx.pry()
-    # case :orddict.is_key(order.price, dict) do
-    #   {:ok, agent} ->
-
-    # end
-
     {:ok, agent} =
       if :orddict.is_key(order.price, dict) do
         IO.puts("if")
@@ -222,8 +210,7 @@ defmodule LimitOrder.Orderbook do
           Decimal.sub(Decimal.new(order.size), size) |> Decimal.to_float() |> Float.to_string()
       })
 
-    orders = node
-
+    # TODO: make this a function
     dict =
       :orddict.update(
         order.price,
@@ -260,13 +247,69 @@ defmodule LimitOrder.Orderbook do
   # def change(%{price: nil} = change) do
   # end
 
-  def change(agent, _change) do
-    IEx.pry()
-    IO.inspect("change")
-    {:ok, agent}
+  # def update_order(agent, order, dict) do
+  #   dict =
+  #     :orddict.update(
+  #       order.price,
+  #       fn value ->
+  #         Enum.map(value, fn old_order ->
+  #           if old_order.id == order.id do
+  #             order
+  #           else
+  #             old_order
+  #           end
+  #         end)
+  #       end,
+  #       dict
+  #     )
 
-    # size = Decimal.new(change.new_size)
-    # price = Decimal.new(change.price)
-    # order = Decimal.new(change.order_id)
+  #   agent
+  #   |> update_tree(order.side, dict)
+
+  #   agent
+  #   |> update_orders_by_id(order)
+  # end
+
+  def change(agent, change) do
+    IO.inspect("change")
+    price = Decimal.new(change["price"])
+    size = Decimal.new(change["size"])
+
+    dict = get_tree(agent, change["side"])
+
+    node = :orddict.fetch(price |> Decimal.to_float(), dict)
+    # ASSERT node
+    order = Enum.find(node, fn order -> order.id == change["order_id"] end)
+
+    order =
+      Map.merge(order, %{
+        # formatting 0e^-8 as scientific val not just 0
+        size: size |> Decimal.to_float() |> Float.to_string()
+      })
+
+    dict =
+      :orddict.update(
+        order.price,
+        fn value ->
+          Enum.map(value, fn old_order ->
+            if old_order.id == order.id do
+              order
+            else
+              old_order
+            end
+          end)
+        end,
+        dict
+      )
+
+    agent
+    |> update_tree(order.side, dict)
+
+    agent
+    |> update_orders_by_id(order)
+
+    IO.puts("change update")
+
+    {:ok, agent}
   end
 end

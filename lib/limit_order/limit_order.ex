@@ -13,7 +13,7 @@ defmodule LimitOrder.Coinbase do
         }
       end)
 
-    {:ok, books_agent} = new_product(books_agent, "BTC-USDC")
+    {:ok, books_agent} = new_product(books_agent, "ETH-DAI")
 
     {:ok, wesocket_process} =
       WebSockex.start("wss://ws-feed.pro.coinbase.com", __MODULE__, %{books_agent: books_agent})
@@ -23,7 +23,7 @@ defmodule LimitOrder.Coinbase do
       {:text,
        Jason.encode!(%{
          "type" => "subscribe",
-         "product_ids" => ["BTC-USDC"],
+         "product_ids" => ["ETH-DAI"],
          "channels" => ["full"]
        })}
     )
@@ -126,7 +126,11 @@ defmodule LimitOrder.Coinbase do
       sequences[product_id] == -2 ->
         IO.inspect("start loading")
 
+        # Task.start(fn ->
         load_orderbook(books_agent, product_id)
+        # end)
+
+        {:ok, %{books_agent: books_agent}}
 
       sequences[product_id] == -1 ->
         IO.inspect("is loading")
@@ -139,9 +143,17 @@ defmodule LimitOrder.Coinbase do
 
       sequences[product_id] + 1 != sequence ->
         # means we dropped a message and we should re sync
-        IO.puts("FUCKING RESYNC")
-        IEx.pry()
+        # IO.puts("FUCKING RESYNC")
+        # queues = Agent.get(books_agent, &Map.get(&1, :queues))
+
+        # # Ie
+        # IEx.pry()
+
+        # Task.start(fn ->
         load_orderbook(books_agent, product_id)
+        # end)
+
+        {:ok, %{books_agent: books_agent}}
 
       true ->
         IO.puts("BOOM")
@@ -196,29 +208,10 @@ defmodule LimitOrder.Coinbase do
           |> Enum.reverse()
 
         Phoenix.PubSub.broadcast(LimitOrder.PubSub, "book", %{bids: bids, asks: asks})
-
-        # asks: asks})
-
-        # changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
-
-        # LimitOrder.Repo.insert!(changeset)
+        # IEx.pry()
 
         {:ok, %{books_agent: books_agent}}
     end
-
-    # if sequences[product_id] == -1 do
-    #   # TODO RETURN void
-    # end
-
-    # if sequence <= sequences[product_id] do
-    #   # TODO RETURN void
-    # end
-
-    # # TODO: can this be in handle frame?
-    # if sequences[product_id] == sequence do
-    #   load_orderbook(books_agent, product_id)
-    #   # RETURN
-    # end
   end
 
   # move to own module? is a http req to get orderbook
@@ -232,6 +225,8 @@ defmodule LimitOrder.Coinbase do
   def load_orderbook(books_agent, product_id) do
     IO.puts("sync order book")
     # IEx.pry()
+
+    {:ok, books_agent} = new_product(books_agent, product_id)
 
     queues = Agent.get(books_agent, &Map.get(&1, :queues))
     sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
