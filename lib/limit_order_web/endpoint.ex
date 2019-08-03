@@ -1,6 +1,8 @@
 defmodule LimitOrderWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :limit_order
 
+  socket "/live", Phoenix.LiveView.Socket
+
   socket "/socket", LimitOrderWeb.UserSocket,
     websocket: true,
     longpoll: false

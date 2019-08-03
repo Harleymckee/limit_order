@@ -47,7 +47,8 @@ defmodule LimitOrder.MixProject do
       {:red_black_tree, git: "https://github.com/tyre/red_black_tree.git"},
       {:rbtree, "~> 0.1.6"},
       {:httpoison, "~> 1.4"},
-      {:decimal, "~> 1.0"}
+      {:decimal, "~> 1.0"},
+      {:phoenix_live_view, github: "phoenixframework/phoenix_live_view"}
     ]
   end
 
