@@ -69,7 +69,8 @@ defmodule LimitOrder.Coinbase do
     payload = Jason.decode!(payload)
     changeset = LimitOrder.CoinbaseUpdate.changeset(%LimitOrder.CoinbaseUpdate{}, payload)
 
-    LimitOrder.Repo.insert!(changeset)
+    LimitOrder.Repo.insert(changeset)
+    |> IO.inspect()
 
     product_id = payload["product_id"]
 
@@ -104,8 +105,13 @@ defmodule LimitOrder.Coinbase do
         %LimitOrder.CoinbaseUpdate{},
         Map.merge(payload, %{"sequence" => sequence |> Integer.to_string()})
       )
+      |> IO.inspect()
 
-    LimitOrder.Repo.insert!(changeset)
+    IO.puts("dingus")
+
+    LimitOrder.Repo.insert(changeset)
+
+    IO.puts("dingus ok")
 
     book_agent = Agent.get(books_agent, &Map.get(&1, product_id))
     sequences = Agent.get(books_agent, &Map.get(&1, :sequences))
