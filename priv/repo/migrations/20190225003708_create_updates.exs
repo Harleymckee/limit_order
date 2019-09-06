@@ -2,9 +2,9 @@ defmodule LimitOrder.Repo.Migrations.CreateCoinbaseUpdates do
   use Ecto.Migration
 
   def change do
-    create table(:coinbase_updates) do
+    create table(:coinbase_updates, primary_key: false) do
       add :type, :string
-      add :time, :string
+      add :time, :naive_datetime, null: false
       add :sequence, :string
       add :trade_id, :integer
       add :product_id, :string
@@ -17,7 +17,7 @@ defmodule LimitOrder.Repo.Migrations.CreateCoinbaseUpdates do
       add :size, :string
       add :remaining_size, :string
       add :reason, :string
-      add :price, :string
+      add :price, :float
       add :side, :string
       add :order_type, :string
       add :funds, :string

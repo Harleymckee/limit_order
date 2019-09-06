@@ -5,10 +5,17 @@ defmodule LimitOrder.CoinbaseUpdate do
   use Ecto.Schema
   import Ecto.{Query, Changeset}, warn: false
 
+  @primary_key {:time, :naive_datetime, []}
+
+  defimpl Phoenix.Param do
+    def to_param(%{time: time}) do
+      NaiveDateTime.to_iso8601(time)
+    end
+  end
+
   @type t :: %__MODULE__{}
   schema "coinbase_updates" do
     field(:type, :string)
-    field(:time, :string)
     field(:sequence, :string)
     field(:trade_id, :integer)
     field(:product_id, :string)
@@ -20,7 +27,7 @@ defmodule LimitOrder.CoinbaseUpdate do
     field(:size, :string)
     field(:remaining_size, :string)
     field(:reason, :string)
-    field(:price, :string)
+    field(:price, :float)
     field(:side, :string)
     field(:order_type, :string)
     field(:funds, :string)
@@ -59,5 +66,13 @@ defmodule LimitOrder.CoinbaseUpdate do
     ])
 
     # |> validate_required()
+  end
+
+  defmodule Query do
+    import Ecto.Query
+
+    def latest(query \\ Trade, count) do
+      from query, order_by: [desc: :time], limit: ^count
+    end
   end
 end
